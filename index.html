@@ -37,3 +37,105 @@
   <div id="schermataScanner" style="display:none;">
     <div id="modalitaAttuale"></div>
     <div id="reader"></div>
+    <div id="result">Inquadra il codice a barre sulla chiave...</div>
+    <button id="btnRiavvia" class="btn" onclick="avviaScanner()">Fai un'altra scansione</button>
+    <br>
+    <button id="btnCambiaModalita" class="btn" onclick="tornaSelezione()">↩️ Cambia modalità</button>
+  </div>
+
+  <script>
+    var API_URL = "https://script.google.com/a/macros/centauro.net/s/AKfycbzUOhtdmLM7dtjazouChN5Ns7lvAGnobkCBW7EPyT2RphpiiLV_lJDJgmQFiqGGDFce/exec";
+    var html5QrcodeScanner;
+    var modalitaCorrente = null;
+
+    function selezionaModalita(modalita) {
+      modalitaCorrente = modalita;
+      document.getElementById('selezioneModalita').style.display = "none";
+      document.getElementById('schermataScanner').style.display = "block";
+      document.getElementById('btnCambiaModalita').style.display = "inline-block";
+
+      var etichetta = document.getElementById('modalitaAttuale');
+      etichetta.innerText = "Modalità attiva: " + (modalita === 'Parcheggio' ? "🅿️ Parcheggio" : "🧼 Lavaggio");
+      etichetta.style.color = modalita === 'Parcheggio' ? '#28a745' : '#fd7e14';
+      etichetta.style.fontWeight = 'bold';
+
+      avviaScanner();
+    }
+
+    function tornaSelezione() {
+      if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().catch(function() {});
+      }
+      document.getElementById('schermataScanner').style.display = "none";
+      document.getElementById('selezioneModalita').style.display = "block";
+      document.getElementById('btnRiavvia').style.display = "none";
+      document.getElementById('btnCambiaModalita').style.display = "none";
+    }
+
+    function jsonpRequest(url) {
+      return new Promise(function(resolve, reject) {
+        var callbackName = "cb_" + Date.now();
+        window[callbackName] = function(data) {
+          resolve(data);
+          delete window[callbackName];
+          document.body.removeChild(script);
+        };
+        var script = document.createElement('script');
+        script.src = url + "&callback=" + callbackName;
+        script.onerror = function() {
+          reject(new Error("Impossibile contattare il server"));
+        };
+        document.body.appendChild(script);
+      });
+    }
+
+    function impostaColoreResult(classe) {
+      var el = document.getElementById('result');
+      el.className = classe;
+    }
+
+    function onScanSuccess(decodedText) {
+      html5QrcodeScanner.clear().then(() => {
+        document.getElementById('result').innerText = "Verifica nel database...";
+        impostaColoreResult('');
+
+        jsonpRequest(API_URL + "?codice=" + encodeURIComponent(decodedText) + "&stato=" + encodeURIComponent(modalitaCorrente))
+          .then(function(data) {
+            if (data.errore) {
+              document.getElementById('result').innerText = "❌ Errore: " + data.errore;
+              impostaColoreResult('result-errore');
+            } else if (data.trovata) {
+              var icona = modalitaCorrente === 'Parcheggio' ? "🅿️" : "🧼";
+              document.getElementById('result').innerText = icona + " Targa " + data.targa + " → " + modalitaCorrente;
+              impostaColoreResult(modalitaCorrente === 'Parcheggio' ? 'result-parcheggio' : 'result-lavaggio');
+            } else {
+              document.getElementById('result').innerText = "⚠️ Targa " + data.targa + " NON trovata nel Database";
+              impostaColoreResult('result-nontrovata');
+            }
+            document.getElementById('btnRiavvia').style.display = "inline-block";
+          })
+          .catch(function(err) {
+            document.getElementById('result').innerText = "❌ Errore: " + err.message;
+            impostaColoreResult('result-errore');
+            document.getElementById('btnRiavvia').style.display = "inline-block";
+          });
+      });
+    }
+
+    function onScanFailure(error) {}
+
+    function avviaScanner() {
+      document.getElementById('btnRiavvia').style.display = "none";
+      document.getElementById('result').innerText = "Inquadra il codice a barre sulla chiave...";
+      impostaColoreResult('');
+
+      html5QrcodeScanner = new Html5QrcodeScanner("reader", {
+        fps: 15,
+        qrbox: { width: 280, height: 160 },
+        rememberLastUsedCamera: true
+      });
+      html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    }
+  </script>
+</body>
+</html>
