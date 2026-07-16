@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 15px; background-color: #f4f4f9; margin: 0; }
+    #reader { width: 100%; max-width: 450px; margin: 15px auto; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; min-height: 250px; }
+    #result { margin-top: 15px; font-size: 20px; font-weight: bold; color: #333; padding: 10px; }
+    .btn { margin-top: 15px; padding: 12px 24px; font-size: 16px; font-weight: bold; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <h2>Verifica Targhe da Chiave</h2>
+  <div id="reader"></div>
+  <div id="result">Inquadra il codice a barre sulla chiave...</div>
+  <button id="btnRiavvia" class="btn" onclick="avviaScanner()" style="display:none;">Fai un'altra scansione</button>
+
+  <script>
+    // 🔴 INCOLLA QUI IL TUO URL /exec DI APPS SCRIPT
+    var API_URL = "INCOLLA_QUI_URL_APPS_SCRIPT/exec";
+
+    var html5QrcodeScanner;
+
+    function onScanSuccess(decodedText) {
+      html5QrcodeScanner.clear().then(() => {
+        document.getElementById('result').innerText = "Verifica nel database...";
+
+        fetch(API_URL + "?codice=" + encodeURIComponent(decodedText))
+          .then(res => res.json())
+          .then(data => {
+            if (data.errore) {
+              document.getElementById('result').innerText = "❌ Errore: " + data.errore;
+            } else if (data.trovata) {
+              document.getElementById('result').innerText = "✅ Targa " + data.targa + " trovata (riga " + data.riga + ")";
+            } else {
+              document.getElementById('result').innerText = "⚠️ Targa " + data.targa + " NON trovata nel Database";
+            }
+            document.getElementById('btnRiavvia').style.display = "inline-block";
+          })
+          .catch(err => {
+            document.getElementById('result').innerText = "❌ Errore di connessione: " + err.message;
+            document.getElementById('btnRiavvia').style.display = "inline-block";
+          });
+      });
+    }
+
+    function onScanFailure(error) {}
+
+    function avviaScanner() {
+      document.getElementById('btnRiavvia').style.display = "none";
+      document.getElementById('result').innerText = "Inquadra il codice a barre sulla chiave...";
+
+      html5QrcodeScanner = new Html5QrcodeScanner("reader", {
+        fps: 15,
+        qrbox: { width: 280, height: 160 },
+        rememberLastUsedCamera: true
+      });
+      html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    }
+
+    window.onload = avviaScanner;
+  </script>
+</body>
+</html>
