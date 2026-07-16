@@ -23,13 +23,29 @@
 
     var html5QrcodeScanner;
 
+    function jsonpRequest(url) {
+      return new Promise(function(resolve, reject) {
+        var callbackName = "cb_" + Date.now();
+        window[callbackName] = function(data) {
+          resolve(data);
+          delete window[callbackName];
+          document.body.removeChild(script);
+        };
+        var script = document.createElement('script');
+        script.src = url + "&callback=" + callbackName;
+        script.onerror = function() {
+          reject(new Error("Impossibile contattare il server"));
+        };
+        document.body.appendChild(script);
+      });
+    }
+
     function onScanSuccess(decodedText) {
       html5QrcodeScanner.clear().then(() => {
         document.getElementById('result').innerText = "Verifica nel database...";
 
-        fetch(API_URL + "?codice=" + encodeURIComponent(decodedText))
-          .then(res => res.json())
-          .then(data => {
+        jsonpRequest(API_URL + "?codice=" + encodeURIComponent(decodedText))
+          .then(function(data) {
             if (data.errore) {
               document.getElementById('result').innerText = "❌ Errore: " + data.errore;
             } else if (data.trovata) {
@@ -39,8 +55,8 @@
             }
             document.getElementById('btnRiavvia').style.display = "inline-block";
           })
-          .catch(err => {
-            document.getElementById('result').innerText = "❌ Errore di connessione: " + err.message;
+          .catch(function(err) {
+            document.getElementById('result').innerText = "❌ Errore: " + err.message;
             document.getElementById('btnRiavvia').style.display = "inline-block";
           });
       });
