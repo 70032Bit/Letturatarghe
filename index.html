@@ -8,20 +8,73 @@
   <style>
     body { font-family: Arial, sans-serif; text-align: center; padding: 15px; background-color: #f4f4f9; margin: 0; }
     #reader { width: 100%; max-width: 450px; margin: 15px auto; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; min-height: 250px; }
-    #result { margin-top: 15px; font-size: 20px; font-weight: bold; color: #333; padding: 10px; }
-    .btn { margin-top: 15px; padding: 12px 24px; font-size: 16px; font-weight: bold; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; }
+    #result { margin-top: 15px; font-size: 22px; font-weight: bold; padding: 16px; border-radius: 10px; transition: background-color 0.3s; color: #333; background-color: #eee; }
+    .btn { margin: 8px; padding: 14px 28px; font-size: 17px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; color: white; }
+    #btnRiavvia { background-color: #007bff; margin-top: 15px; display: none; }
+    #btnCambiaModalita { background-color: #6c757d; margin-top: 10px; display: none; }
+
+    /* Schermata scelta modalità */
+    #selezioneModalita { margin-top: 40px; }
+    #btnParcheggio { background-color: #28a745; padding: 22px 40px; font-size: 20px; }
+    #btnLavaggio { background-color: #fd7e14; padding: 22px 40px; font-size: 20px; }
+
+    #modalitaAttuale { font-size: 16px; color: #555; margin-top: 10px; }
+
+    /* Colori risultato */
+    .result-parcheggio { background-color: #28a745 !important; color: white !important; }
+    .result-lavaggio { background-color: #fd7e14 !important; color: white !important; }
+    .result-errore { background-color: #dc3545 !important; color: white !important; }
+    .result-nontrovata { background-color: #ffc107 !important; color: #333 !important; }
   </style>
 </head>
 <body>
   <h2>Verifica Targhe da Chiave</h2>
-  <div id="reader"></div>
-  <div id="result">Inquadra il codice a barre sulla chiave...</div>
-  <button id="btnRiavvia" class="btn" onclick="avviaScanner()" style="display:none;">Fai un'altra scansione</button>
+
+  <!-- Schermata iniziale: scelta modalità -->
+  <div id="selezioneModalita">
+    <p>Seleziona la modalità:</p>
+    <button id="btnParcheggio" class="btn" onclick="selezionaModalita('Parcheggio')">🅿️ Parcheggio</button>
+    <button id="btnLavaggio" class="btn" onclick="selezionaModalita('Lavaggio')">🧼 Lavaggio</button>
+  </div>
+
+  <!-- Schermata scanner (nascosta finché non si sceglie la modalità) -->
+  <div id="schermataScanner" style="display:none;">
+    <div id="modalitaAttuale"></div>
+    <div id="reader"></div>
+    <div id="result">Inquadra il codice a barre sulla chiave...</div>
+    <button id="btnRiavvia" class="btn" onclick="avviaScanner()">Fai un'altra scansione</button>
+    <br>
+    <button id="btnCambiaModalita" class="btn" onclick="tornaSelezione()">↩️ Cambia modalità</button>
+  </div>
 
   <script>
     var API_URL = "https://script.google.com/macros/s/AKfycbwlB2VmWuEu7pXZu6IfoaA55dG8zpCunLIBv0cfMeOtGN2_zdj99HVdBaxE1e4u4H0Y/exec";
-
     var html5QrcodeScanner;
+    var modalitaCorrente = null;
+
+    function selezionaModalita(modalita) {
+      modalitaCorrente = modalita;
+      document.getElementById('selezioneModalita').style.display = "none";
+      document.getElementById('schermataScanner').style.display = "block";
+      document.getElementById('btnCambiaModalita').style.display = "inline-block";
+
+      var etichetta = document.getElementById('modalitaAttuale');
+      etichetta.innerText = "Modalità attiva: " + (modalita === 'Parcheggio' ? "🅿️ Parcheggio" : "🧼 Lavaggio");
+      etichetta.style.color = modalita === 'Parcheggio' ? '#28a745' : '#fd7e14';
+      etichetta.style.fontWeight = 'bold';
+
+      avviaScanner();
+    }
+
+    function tornaSelezione() {
+      if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().catch(function() {});
+      }
+      document.getElementById('schermataScanner').style.display = "none";
+      document.getElementById('selezioneModalita').style.display = "block";
+      document.getElementById('btnRiavvia').style.display = "none";
+      document.getElementById('btnCambiaModalita').style.display = "none";
+    }
 
     function jsonpRequest(url) {
       return new Promise(function(resolve, reject) {
@@ -40,23 +93,34 @@
       });
     }
 
+    function impostaColoreResult(classe) {
+      var el = document.getElementById('result');
+      el.className = classe;
+    }
+
     function onScanSuccess(decodedText) {
       html5QrcodeScanner.clear().then(() => {
         document.getElementById('result').innerText = "Verifica nel database...";
+        impostaColoreResult('');
 
-        jsonpRequest(API_URL + "?codice=" + encodeURIComponent(decodedText))
+        jsonpRequest(API_URL + "?codice=" + encodeURIComponent(decodedText) + "&stato=" + encodeURIComponent(modalitaCorrente))
           .then(function(data) {
             if (data.errore) {
               document.getElementById('result').innerText = "❌ Errore: " + data.errore;
+              impostaColoreResult('result-errore');
             } else if (data.trovata) {
-              document.getElementById('result').innerText = "✅ Targa " + data.targa + " trovata (riga " + data.riga + ")";
+              var icona = modalitaCorrente === 'Parcheggio' ? "🅿️" : "🧼";
+              document.getElementById('result').innerText = icona + " Targa " + data.targa + " → " + modalitaCorrente;
+              impostaColoreResult(modalitaCorrente === 'Parcheggio' ? 'result-parcheggio' : 'result-lavaggio');
             } else {
               document.getElementById('result').innerText = "⚠️ Targa " + data.targa + " NON trovata nel Database";
+              impostaColoreResult('result-nontrovata');
             }
             document.getElementById('btnRiavvia').style.display = "inline-block";
           })
           .catch(function(err) {
             document.getElementById('result').innerText = "❌ Errore: " + err.message;
+            impostaColoreResult('result-errore');
             document.getElementById('btnRiavvia').style.display = "inline-block";
           });
       });
@@ -67,6 +131,7 @@
     function avviaScanner() {
       document.getElementById('btnRiavvia').style.display = "none";
       document.getElementById('result').innerText = "Inquadra il codice a barre sulla chiave...";
+      impostaColoreResult('');
 
       html5QrcodeScanner = new Html5QrcodeScanner("reader", {
         fps: 15,
@@ -75,8 +140,6 @@
       });
       html5QrcodeScanner.render(onScanSuccess, onScanFailure);
     }
-
-    window.onload = avviaScanner;
   </script>
 </body>
 </html>
