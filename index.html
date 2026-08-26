@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4f4f9">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 15px; background-color: #f4f4f9; margin: 0; }
+    #reader { width: 100%; max-width: 450px; margin: 15px auto; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; min-height: 250px; }
+    #result { margin-top: 15px; font-size: 22px; font-weight: bold; padding: 16px; border-radius: 10px; transition: background-color 0.3s; color: #333; background-color: #eee; }
+    .btn { margin: 8px; padding: 22px 40px; font-size: 20px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; color: #333; }
+
+    #selezioneModalita { margin-top: 40px; }
+    #btnPulita { background-color: #c6efce; }
+    #btnSporcaParcheggio { background-color: #ef9a9a; }
+    #btnSporcaLavaggio { background-color: #ffe598; }
+
+    #situazioneAttuale { font-size: 16px; color: #555; margin-top: 10px; }
+
+    .result-pulita { background-color: #c6efce !important; color: #155724 !important; }
+    .result-sporca-parcheggio { background-color: #ef9a9a !important; color: #721c24 !important; }
+    .result-sporca-lavaggio { background-color: #ffe598 !important; color: #856404 !important; }
+    .result-errore { background-color: #dc3545 !important; color: white !important; }
+  </style>
+</head>
+<body>
+  <h2>Verifica Targhe da Chiave</h2>
+
+  <div id="selezioneModalita">
+    <p>Seleziona la situazione:</p>
+    <button id="btnPulita" class="btn" onclick="selezionaSituazione('Pulita', 'Parcheggio', 'Pulita in parcheggio', 'result-pulita')">✅ Pulita in parcheggio</button>
+    <button id="btnSporcaParcheggio" class="btn" onclick="selezionaSituazione('Sporca', 'Parcheggio', 'Sporca in parcheggio', 'result-sporca-parcheggio')">🚗 Sporca in parcheggio</button>
+    <button id="btnSporcaLavaggio" class="btn" onclick="selezionaSituazione('Sporca', 'Lavaggio', 'Sporca al lavaggio', 'result-sporca-lavaggio')">&#129529; Sporca al lavaggio</button>
+  </div>
+
+  <div id="schermataScanner" style="display:none;">
+    <div id="situazioneAttuale"></div>
+    <div id="reader"></div>
+    <div id="result">Inquadra il codice a barre sulla chiave...</div>
+    <button id="btnRiavvia" class="btn" onclick="avviaScanner()">Fai un'altra scansione</button>
+    <br>
+    <button id="btnCambiaModalita" class="btn" onclick="tornaSelezione()">↩️ Cambia modalità</button>
+  </div>
+
+  <script>
+    var API_URL = "https://script.google.com/a/macros/centauro.net/s/AKfycbzUOhtdmLM7dtjazouChN5Ns7lvAGnobkCBW7EPyT2RphpiiLV_lJDJgmQFiqGGDFce/exec";
+    var html5QrcodeScanner;
+    var statoCorrente = null;
+    var locazioneCorrente = null;
+    var classeColoreCorrente = '';
+
+    function selezionaSituazione(stato, locazione, label, classeColore) {
+      statoCorrente = stato;
+      locazioneCorrente = locazione;
+      classeColoreCorrente = classeColore;
+      document.getElementById('selezioneModalita').style.display = "none";
+      document.getElementById('schermataScanner').style.display = "block";
+      document.getElementById('btnCambiaModalita').style.display = "inline-block";
+
+      var etichetta = document.getElementById('situazioneAttuale');
+      etichetta.innerText = "Situazione: " + label;
+      etichetta.style.color = "#333";
+      etichetta.style.fontWeight = 'bold';
+
+      avviaScanner();
+    }
+
+    function tornaSelezione() {
+      if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().catch(function() {});
+      }
+      document.getElementById('schermataScanner').style.display = "none";
+      document.getElementById('selezioneModalita').style.display = "block";
+      document.getElementById('btnRiavvia').style.display = "none";
+      document.getElementById('btnCambiaModalita').style.display = "none";
+    }
+
+    function jsonpRequest(url) {
+      return new Promise(function(resolve, reject) {
+        var callbackName = "cb_" + Date.now();
+        var script = document.createElement('script');
+        window[callbackName] = function(data) {
+          resolve(data);
+          delete window[callbackName];
+          if (script.parentNode) {
+            script.parentNode.removeChild(script);
+          }
+        };
+        script.src = url + "&callback=" + callbackName;
+        script.onerror = function() {
+          delete window[callbackName];
+          if (script.parentNode) {
+            script.parentNode.removeChild(script);
+          }
+          reject(new Error("Impossibile contattare il server"));
+        };
+        document.body.appendChild(script);
+      });
+    }
+
+    function impostaColoreResult(classe) {
+      var el = document.getElementById('result');
+      el.className = classe;
+    }
+
+    function onScanSuccess(decodedText) {
+      html5QrcodeScanner.clear().then(() => {
+        document.getElementById('result').innerText = "Verifica nel database...";
+        impostaColoreResult('');
+
+        var url = API_URL + "?codice=" + encodeURIComponent(decodedText)
+                + "&stato=" + encodeURIComponent(statoCorrente)
+                + "&locazione=" + encodeURIComponent(locazioneCorrente);
+        jsonpRequest(url)
+          .then(function(data) {
+            if (data.errore) {
+              document.getElementById('result').innerText = "❌ Errore: " + data.errore;
+              impostaColoreResult('result-errore');
+            } else if (data.trovata) {
+              var icona = locazioneCorrente === 'Lavaggio' ? "🧽" : "🚗";
+              document.getElementById('result').innerText = icona + " Targa " + data.targa + " — " + statoCorrente + " in " + locazioneCorrente;
+              impostaColoreResult(classeColoreCorrente);
+            } else {
+              document.getElementById('result').innerText = "⚠️ Targa " + data.targa + " NON trovata nel Database";
+              impostaColoreResult('result-errore');
+            }
+            document.getElementById('btnRiavvia').style.display = "inline-block";
+          })
+          .catch(function(err) {
+            document.getElementById('result').innerText = "❌ Errore: " + err.message;
+            impostaColoreResult('result-errore');
+            document.getElementById('btnRiavvia').style.display = "inline-block";
+          });
+      });
+    }
+
+    function onScanFailure(error) {}
+
+    function avviaScanner() {
+      document.getElementById('btnRiavvia').style.display = "none";
+      document.getElementById('result').innerText = "Inquadra il codice a barre sulla chiave...";
+      impostaColoreResult('');
+
+      html5QrcodeScanner = new Html5QrcodeScanner("reader", {
+        fps: 15,
+        qrbox: { width: 280, height: 160 },
+        rememberLastUsedCamera: true
+      });
+      html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    }
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(function() { console.log('Service worker registrato'); })
+        .catch(function(err) { console.error('Service worker fallito:', err); });
+    }
+  </script>
+</body>
+</html>
