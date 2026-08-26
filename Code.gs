@@ -54,14 +54,19 @@ function doGet(e) {
       throw new Error("Foglio '" + CONFIG.foglioDatabase + "' non trovato");
     }
 
+    function normalizza(text) {
+      return String(text).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    }
+
     var dati = database.getDataRange().getValues();
     var targa = "";
     var rigaFoglio = -1;
-    var codiceUpper = codice.toUpperCase();
+    var codicePulito = normalizza(codice);
+
     for (var i = CONFIG.rigaInizio - 1; i < dati.length; i++) {
-      if (String(dati[i][CONFIG.colCodice]).trim().toUpperCase() === codiceUpper) {
-        targa = String(dati[i][CONFIG.colTarga]);
+      if (normalizza(dati[i][CONFIG.colCodice]) === codicePulito) {
         rigaFoglio = i + 1;
+        targa = String(dati[i][CONFIG.colTarga]).trim() || codice;
         break;
       }
     }
