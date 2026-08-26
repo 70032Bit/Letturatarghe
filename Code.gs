@@ -1,7 +1,7 @@
 /*
   Google Apps Script per Verifica Targhe da Chiave
   - Riceve GET: ?codice=...&stato=...&locazione=...&callback=...
-  - Cerca il codice (targa) nel foglio 'Anagrafica' (col D, righe 10+)
+  - Cerca il codice (targa) nel foglio 'Database' (col D, righe 10+)
   - Scrive la locazione in col B (Car Status)
   - Colora la riga in base allo stato
   - Incrementa contatori in F3, F4, F5
@@ -10,7 +10,7 @@
 */
 
 var CONFIG = {
-  foglioAnagrafica: "Anagrafica",  // foglio con dati auto
+  foglioDatabase: "Database",      // foglio con dati auto
   foglioLog: "Log",                // foglio dove salvare le scansioni
   rigaInizio: 10,                  // prima riga dati
   colCodice: 3,                    // 0-based: colonna D (codice/targa)
@@ -49,16 +49,17 @@ function doGet(e) {
     }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var anagrafica = ss.getSheetByName(CONFIG.foglioAnagrafica);
-    if (!anagrafica) {
-      throw new Error("Foglio '" + CONFIG.foglioAnagrafica + "' non trovato");
+    var database = ss.getSheetByName(CONFIG.foglioDatabase);
+    if (!database) {
+      throw new Error("Foglio '" + CONFIG.foglioDatabase + "' non trovato");
     }
 
-    var dati = anagrafica.getDataRange().getValues();
+    var dati = database.getDataRange().getValues();
     var targa = "";
     var rigaFoglio = -1;
+    var codiceUpper = codice.toUpperCase();
     for (var i = CONFIG.rigaInizio - 1; i < dati.length; i++) {
-      if (String(dati[i][CONFIG.colCodice]).trim() === codice) {
+      if (String(dati[i][CONFIG.colCodice]).trim().toUpperCase() === codiceUpper) {
         targa = String(dati[i][CONFIG.colTarga]);
         rigaFoglio = i + 1;
         break;
@@ -74,14 +75,14 @@ function doGet(e) {
 
       var colore = colorePerSituazione(stato, locazione);
       if (colore && rigaFoglio > 0) {
-        anagrafica.getRange(rigaFoglio, 1, 1, anagrafica.getLastColumn()).setBackground(colore);
-        anagrafica.getRange(rigaFoglio, CONFIG.colCarStatus + 1).setValue(locazione);
+        database.getRange(rigaFoglio, 1, 1, database.getLastColumn()).setBackground(colore);
+        database.getRange(rigaFoglio, CONFIG.colCarStatus + 1).setValue(locazione);
       }
 
       var cellaContatore = contaPerSituazione(stato, locazione);
       if (cellaContatore) {
-        var valore = Number(anagrafica.getRange(cellaContatore).getValue()) || 0;
-        anagrafica.getRange(cellaContatore).setValue(valore + 1);
+        var valore = Number(database.getRange(cellaContatore).getValue()) || 0;
+        database.getRange(cellaContatore).setValue(valore + 1);
       }
 
       var log = ss.getSheetByName(CONFIG.foglioLog);
