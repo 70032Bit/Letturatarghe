@@ -16,9 +16,9 @@ var CONFIG = {
   colCodice: 3,                    // 0-based: colonna D (codice/targa)
   colTarga: 3,                     // 0-based: colonna D (targa)
   colCarStatus: 1,                 // 0-based: colonna B (locazione)
-  contaPulitaParcheggio: "F3",
-  contaSporcaParcheggio: "F4",
-  contaSporcaLavaggio: "F5"
+  contaPulitaParcheggio: "H3",
+  contaSporcaParcheggio: "H4",
+  contaSporcaLavaggio: "H5"
 };
 
 function colorePerSituazione(stato, locazione) {
