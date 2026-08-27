@@ -62,6 +62,23 @@ function azzeraDatabase(database) {
   return { azzerato: true, messaggio: "Righe evidenziate e contatori azzerati" };
 }
 
+function azzeraDaSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var database = ss.getSheetByName(CONFIG.foglioDatabase);
+  if (!database) {
+    throw new Error("Foglio '" + CONFIG.foglioDatabase + "' non trovato");
+  }
+  azzeraDatabase(database);
+  SpreadsheetApp.getUi().alert("Righe evidenziate e contatori azzerati.");
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("Verifica Targhe")
+    .addItem("Azzera database", "azzeraDaSheet")
+    .addToUi();
+}
+
 function doGet(e) {
   var callback = e.parameter.callback;
   var azione = String(e.parameter.azione || "").trim();
