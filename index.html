@@ -25,6 +25,7 @@
     .result-sporca-parcheggio { background-color: #ef9a9a !important; color: #721c24 !important; }
     .result-sporca-lavaggio { background-color: #ffe598 !important; color: #856404 !important; }
     .result-errore { background-color: #dc3545 !important; color: white !important; }
+    .btn-azzera { background-color: #dc3545; color: white; }
   </style>
 </head>
 <body>
@@ -35,6 +36,8 @@
     <button id="btnPulita" class="btn" onclick="selezionaSituazione('Pulita', 'Parcheggio', 'Pulita in parcheggio', 'result-pulita')">✅ Pulita in parcheggio</button>
     <button id="btnSporcaParcheggio" class="btn" onclick="selezionaSituazione('Sporca', 'Parcheggio', 'Sporca in parcheggio', 'result-sporca-parcheggio')">🚗 Sporca in parcheggio</button>
     <button id="btnSporcaLavaggio" class="btn" onclick="selezionaSituazione('Sporca', 'Lavaggio', 'Sporca al lavaggio', 'result-sporca-lavaggio')">&#129529; Sporca al lavaggio</button>
+    <br>
+    <button id="btnAzzera" class="btn btn-azzera" onclick="azzeraDatabase()">🗑️ Azzera Database</button>
   </div>
 
   <div id="schermataScanner" style="display:none;">
@@ -136,6 +139,23 @@
             document.getElementById('btnRiavvia').style.display = "inline-block";
           });
       });
+    }
+
+    function azzeraDatabase() {
+      if (!confirm("Sei sicuro di voler azzerare il Database? Verranno cancellati i dati da B10 in poi e i contatori.")) {
+        return;
+      }
+      jsonpRequest(API_URL + "?azione=azzera")
+        .then(function(data) {
+          if (data.azzerato) {
+            alert("✅ Database azzerato correttamente");
+          } else {
+            alert("❌ Errore: " + (data.errore || "sconosciuto"));
+          }
+        })
+        .catch(function(err) {
+          alert("❌ Errore di connessione: " + err.message);
+        });
     }
 
     function onScanFailure(error) {}

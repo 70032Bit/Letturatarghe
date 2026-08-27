@@ -1,6 +1,7 @@
 /*
   Google Apps Script per Verifica Targhe da Chiave
   - Riceve GET: ?codice=...&stato=...&locazione=...&callback=...
+  - Riceve GET: ?azione=azzera&callback=... per azzerare il Database
   - Cerca il codice (targa) nel foglio 'Database' (col D, righe 10+)
   - Scrive la locazione in col B (Car Status)
   - Colora la riga in base allo stato
@@ -35,24 +36,42 @@ function contaPerSituazione(stato, locazione) {
   return null;
 }
 
+function azzeraDatabase(database) {
+  var lastRow = database.getLastRow();
+  if (lastRow >= CONFIG.rigaInizio) {
+    // Cancella contenuto e formattazione da B10 a H(ultima riga)
+    database.getRange(CONFIG.rigaInizio, 2, lastRow - CONFIG.rigaInizio + 1, 7).clear();
+  }
+  // Azzera i contatori H3, H4, H5
+  database.getRange("H3:H5").clearContent();
+  return { azzerato: true, messaggio: "Database azzerato" };
+}
+
 function doGet(e) {
   var callback = e.parameter.callback;
-  var codice = String(e.parameter.codice || "").trim();
-  var stato = String(e.parameter.stato || "").trim();
-  var locazione = String(e.parameter.locazione || "").trim();
+  var azione = String(e.parameter.azione || "").trim();
 
-  var risposta = { targa: "", trovata: false, errore: "" };
+  var risposta = {};
 
   try {
-    if (!codice) {
-      throw new Error("Codice mancante");
-    }
-
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var database = ss.getSheetByName(CONFIG.foglioDatabase);
     if (!database) {
       throw new Error("Foglio '" + CONFIG.foglioDatabase + "' non trovato");
     }
+
+    if (azione === "azzera") {
+      risposta = azzeraDatabase(database);
+    } else {
+      var codice = String(e.parameter.codice || "").trim();
+      var stato = String(e.parameter.stato || "").trim();
+      var locazione = String(e.parameter.locazione || "").trim();
+
+      risposta = { targa: "", trovata: false, errore: "" };
+
+      if (!codice) {
+        throw new Error("Codice mancante");
+      }
 
     function normalizza(text) {
       return String(text).toUpperCase().replace(/[^A-Z0-9]/g, '');
