@@ -36,6 +36,10 @@ function contaPerSituazione(stato, locazione) {
   return null;
 }
 
+function normalizza(text) {
+  return String(text).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
 function azzeraDatabase(database) {
   var lastRow = database.getLastRow();
   if (lastRow >= CONFIG.rigaInizio) {
@@ -72,10 +76,6 @@ function doGet(e) {
       if (!codice) {
         throw new Error("Codice mancante");
       }
-
-    function normalizza(text) {
-      return String(text).toUpperCase().replace(/[^A-Z0-9]/g, '');
-    }
 
     var dati = database.getDataRange().getValues();
     var targa = "";
