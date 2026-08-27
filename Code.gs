@@ -1,11 +1,11 @@
 /*
   Google Apps Script per Verifica Targhe da Chiave
   - Riceve GET: ?codice=...&stato=...&locazione=...&callback=...
-  - Riceve GET: ?azione=azzera&callback=... per azzerare il Database
-  - Cerca il codice (targa) nel foglio 'Database' (col D, righe 10+)
-  - Scrive la locazione in col B (Car Status)
+  - Riceve GET: ?azione=azzera&callback=... per azzerare le righe evidenziate
+  - Cerca il codice (targa) nel foglio 'Database' (col C, righe 10+)
+  - Scrive la locazione in col A (Car Status)
   - Colora la riga in base allo stato
-  - Incrementa contatori in F3, F4, F5
+  - Incrementa contatori in G3, G4, G5
   - Scrive un LOG nel foglio 'Log' (Timestamp, Codice, Targa, Stato, Locazione)
   - Restituisce JSON/JSONP
 */
@@ -14,12 +14,12 @@ var CONFIG = {
   foglioDatabase: "Database",      // foglio con dati auto
   foglioLog: "Log",                // foglio dove salvare le scansioni
   rigaInizio: 10,                  // prima riga dati
-  colCodice: 3,                    // 0-based: colonna D (codice/targa)
-  colTarga: 3,                     // 0-based: colonna D (targa)
-  colCarStatus: 1,                 // 0-based: colonna B (locazione)
-  contaPulitaParcheggio: "H3",
-  contaSporcaParcheggio: "H4",
-  contaSporcaLavaggio: "H5"
+  colCodice: 2,                    // 0-based: colonna C (codice/targa)
+  colTarga: 2,                     // 0-based: colonna C (targa)
+  colCarStatus: 0,                 // 0-based: colonna A (locazione)
+  contaPulitaParcheggio: "G3",
+  contaSporcaParcheggio: "G4",
+  contaSporcaLavaggio: "G5"
 };
 
 function colorePerSituazione(stato, locazione) {
@@ -43,12 +43,23 @@ function normalizza(text) {
 function azzeraDatabase(database) {
   var lastRow = database.getLastRow();
   if (lastRow >= CONFIG.rigaInizio) {
-    // Cancella contenuto e formattazione da B10 a H(ultima riga)
-    database.getRange(CONFIG.rigaInizio, 2, lastRow - CONFIG.rigaInizio + 1, 7).clear();
+    for (var r = CONFIG.rigaInizio; r <= lastRow; r++) {
+      var sfondi = database.getRange(r, 1, 1, database.getLastColumn()).getBackgrounds()[0];
+      var evidenziata = false;
+      for (var c = 0; c < sfondi.length; c++) {
+        if (sfondi[c] && sfondi[c] !== "#ffffff" && sfondi[c] !== "") {
+          evidenziata = true;
+          break;
+        }
+      }
+      if (evidenziata) {
+        database.getRange(r, 1, 1, database.getLastColumn()).clear();
+      }
+    }
   }
-  // Azzera i contatori H3, H4, H5
-  database.getRange("H3:H5").clearContent();
-  return { azzerato: true, messaggio: "Database azzerato" };
+  // Azzera i contatori G3, G4, G5
+  database.getRange("G3:G5").clearContent();
+  return { azzerato: true, messaggio: "Righe evidenziate e contatori azzerati" };
 }
 
 function doGet(e) {
