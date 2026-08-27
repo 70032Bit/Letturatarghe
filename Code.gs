@@ -72,10 +72,36 @@ function azzeraDaSheet() {
   SpreadsheetApp.getUi().alert("Righe evidenziate e contatori azzerati.");
 }
 
+// Pulisce il testo e il colore di sfondo delle celle B10:B e azzera G3:G5 mantenendo i bordi
+function pulisciColonnaB() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var database = ss.getSheetByName(CONFIG.foglioDatabase);
+  
+  if (!database) {
+    throw new Error("Foglio '" + CONFIG.foglioDatabase + "' non trovato");
+  }
+
+  var lastRow = database.getLastRow();
+  
+  if (lastRow >= CONFIG.rigaInizio) {
+    var numRows = lastRow - CONFIG.rigaInizio + 1;
+    var rangeB = database.getRange(CONFIG.rigaInizio, 2, numRows, 1); // Colonna B (2) a partire dalla riga 10
+    
+    rangeB.clearContent();     // Rimuove solo il contenuto testuale
+    rangeB.clearBackground();  // Rimuove il colore di sfondo mantenendo i bordi
+  }
+
+  // Azzera i contatori G3, G4, G5
+  database.getRange("G3:G5").clearContent();
+
+  SpreadsheetApp.getUi().alert("Colonna B (da riga 10) e contatori G3:G5 puliti con successo.");
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("Verifica Targhe")
-    .addItem("Azzera database", "azzeraDaSheet")
+    .addItem("Azzera righe evidenziate", "azzeraDaSheet")
+    .addItem("Pulisci Colonna B e Contatori", "pulisciColonnaB")
     .addToUi();
 }
 
@@ -105,48 +131,48 @@ function doGet(e) {
         throw new Error("Codice mancante");
       }
 
-    var dati = database.getDataRange().getValues();
-    var targa = "";
-    var rigaFoglio = -1;
-    var codicePulito = normalizza(codice);
+      var dati = database.getDataRange().getValues();
+      var targa = "";
+      var rigaFoglio = -1;
+      var codicePulito = normalizza(codice);
 
-    for (var i = CONFIG.rigaInizio - 1; i < dati.length; i++) {
-      if (normalizza(dati[i][CONFIG.colCodice]) === codicePulito) {
-        rigaFoglio = i + 1;
-        targa = String(dati[i][CONFIG.colTarga]).trim() || codice;
-        break;
+      for (var i = CONFIG.rigaInizio - 1; i < dati.length; i++) {
+        if (normalizza(dati[i][CONFIG.colCodice]) === codicePulito) {
+          rigaFoglio = i + 1;
+          targa = String(dati[i][CONFIG.colTarga]).trim() || codice;
+          break;
+        }
+      }
+
+      if (!targa) {
+        risposta.targa = codice;
+        risposta.trovata = false;
+      } else {
+        risposta.targa = targa;
+        risposta.trovata = true;
+
+        var colore = colorePerSituazione(stato, locazione);
+        if (colore && rigaFoglio > 0) {
+          database.getRange(rigaFoglio, 1, 1, database.getLastColumn()).setBackground(colore);
+          database.getRange(rigaFoglio, CONFIG.colCarStatus + 1).setValue(locazione);
+        }
+
+        var cellaContatore = contaPerSituazione(stato, locazione);
+        if (cellaContatore) {
+          var valore = Number(database.getRange(cellaContatore).getValue()) || 0;
+          database.getRange(cellaContatore).setValue(valore + 1);
+        }
+
+        var log = ss.getSheetByName(CONFIG.foglioLog);
+        if (!log) {
+          // Se il foglio Log non esiste, lo crea
+          log = ss.insertSheet(CONFIG.foglioLog);
+          log.appendRow(["Timestamp", "Codice", "Targa", "Stato", "Locazione"]);
+        }
+        log.appendRow([new Date(), codice, targa, stato, locazione]);
       }
     }
-
-    if (!targa) {
-      risposta.targa = codice;
-      risposta.trovata = false;
-    } else {
-      risposta.targa = targa;
-      risposta.trovata = true;
-
-      var colore = colorePerSituazione(stato, locazione);
-      if (colore && rigaFoglio > 0) {
-        database.getRange(rigaFoglio, 1, 1, database.getLastColumn()).setBackground(colore);
-        database.getRange(rigaFoglio, CONFIG.colCarStatus + 1).setValue(locazione);
-      }
-
-      var cellaContatore = contaPerSituazione(stato, locazione);
-      if (cellaContatore) {
-        var valore = Number(database.getRange(cellaContatore).getValue()) || 0;
-        database.getRange(cellaContatore).setValue(valore + 1);
-      }
-
-      var log = ss.getSheetByName(CONFIG.foglioLog);
-      if (!log) {
-        // Se il foglio Log non esiste, lo crea
-        log = ss.insertSheet(CONFIG.foglioLog);
-        log.appendRow(["Timestamp", "Codice", "Targa", "Stato", "Locazione"]);
-      }
-      log.appendRow([new Date(), codice, targa, stato, locazione]);
-    }
-  }
-} catch (err) {
+  } catch (err) {
     risposta.errore = err.toString();
   }
 
