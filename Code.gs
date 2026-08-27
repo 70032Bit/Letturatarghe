@@ -117,7 +117,8 @@ function doGet(e) {
       }
       log.appendRow([new Date(), codice, targa, stato, locazione]);
     }
-  } catch (err) {
+  }
+} catch (err) {
     risposta.errore = err.toString();
   }
 
