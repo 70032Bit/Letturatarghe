@@ -1,13 +1,9 @@
 /*
   Google Apps Script per Verifica Targhe da Chiave
   - Riceve GET: ?codice=...&stato=...&locazione=...&callback=...
-  - Riceve GET: ?azione=azzera&callback=... per azzerare le righe evidenziate
-  - Cerca il codice (targa) nel foglio 'Database' (col C, righe 10+)
-  - Scrive la locazione in col A (Car Status)
-  - Colora la riga in base allo stato
-  - Incrementa contatori in G3, G4, G5
-  - Scrive un LOG nel foglio 'Log' (Timestamp, Codice, Targa, Stato, Locazione)
-  - Restituisce JSON/JSONP
+  - Riceve GET: ?azione=azzera&callback=... per azzerare A10:G + contatori
+  - Menu personalizzato 'Pulizia' in alto
+  - Eliminazione fisica delle colonne H:X (dalla colonna 8 alla 24)
 */
 
 var CONFIG = {
@@ -40,71 +36,91 @@ function normalizza(text) {
   return String(text).toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-function azzeraDatabase(database) {
-  var lastRow = database.getLastRow();
-  if (lastRow >= CONFIG.rigaInizio) {
-    for (var r = CONFIG.rigaInizio; r <= lastRow; r++) {
-      var sfondi = database.getRange(r, 1, 1, database.getLastColumn()).getBackgrounds()[0];
-      var evidenziata = false;
-      for (var c = 0; c < sfondi.length; c++) {
-        if (sfondi[c] && sfondi[c] !== "#ffffff" && sfondi[c] !== "") {
-          evidenziata = true;
-          break;
-        }
-      }
-      if (evidenziata) {
-        database.getRange(r, 1, 1, database.getLastColumn()).clear();
-      }
-    }
-  }
-  // Azzera i contatori G3, G4, G5
-  database.getRange("G3:G5").clearContent();
-  return { azzerato: true, messaggio: "Righe evidenziate e contatori azzerati" };
-}
-
-function azzeraDaSheet() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var database = ss.getSheetByName(CONFIG.foglioDatabase);
-  if (!database) {
-    throw new Error("Foglio '" + CONFIG.foglioDatabase + "' non trovato");
-  }
-  azzeraDatabase(database);
-  SpreadsheetApp.getUi().alert("Righe evidenziate e contatori azzerati.");
-}
-
-// Pulisce il testo e il colore di sfondo delle celle B10:B e azzera G3:G5 mantenendo i bordi
-function pulisciColonnaB() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var database = ss.getSheetByName(CONFIG.foglioDatabase);
-  
-  if (!database) {
-    throw new Error("Foglio '" + CONFIG.foglioDatabase + "' non trovato");
-  }
-
-  var lastRow = database.getLastRow();
-  
-  if (lastRow >= CONFIG.rigaInizio) {
-    var numRows = lastRow - CONFIG.rigaInizio + 1;
-    var rangeB = database.getRange(CONFIG.rigaInizio, 2, numRows, 1); // Colonna B (2) a partire dalla riga 10
-    
-    rangeB.clearContent();     // Rimuove solo il contenuto testuale
-    rangeB.clearBackground();  // Rimuove il colore di sfondo mantenendo i bordi
-  }
-
-  // Azzera i contatori G3, G4, G5
-  database.getRange("G3:G5").clearContent();
-
-  SpreadsheetApp.getUi().alert("Colonna B (da riga 10) e contatori G3:G5 puliti con successo.");
-}
-
+// -------------------------------------------------------------
+// CREAZIONE MENU IN ALTO ALL'APERTURA DEL FOGLIO
+// -------------------------------------------------------------
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu("Verifica Targhe")
-    .addItem("Azzera righe evidenziate", "azzeraDaSheet")
-    .addItem("Pulisci Colonna B e Contatori", "pulisciColonnaB")
+    .createMenu("Pulizia")
+    .addItem("Pulisci Tabella (A10:G) e Contatori", "menuPulisciDatabase")
+    .addItem("Elimina Colonne H:X", "menuPulisciHX")
     .addToUi();
 }
 
+// -------------------------------------------------------------
+// SEZIONE PULIZIA A10:G E CONTATORI
+// -------------------------------------------------------------
+function pulisciDatabase(chiamataDaMenu) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var database = ss.getSheetByName(CONFIG.foglioDatabase);
+
+  if (!database) {
+    throw new Error("Foglio '" + CONFIG.foglioDatabase + "' non trovato");
+  }
+
+  if (chiamataDaMenu === true) {
+    var ui = SpreadsheetApp.getUi();
+    var risposta = ui.alert("Conferma", "Sei sicuro di voler pulire TUTTA la tabella (A10:G) e i contatori G3:G5?", ui.ButtonSet.YES_NO);
+    if (risposta !== ui.Button.YES) {
+      return { azzerato: false, messaggio: "Operazione annullata" };
+    }
+  }
+
+  var lastRow = database.getLastRow();
+  
+  if (lastRow >= CONFIG.rigaInizio) {
+    var rangeTotale = database.getRange(CONFIG.rigaInizio, 1, lastRow - CONFIG.rigaInizio + 1, 7);
+    rangeTotale.clearContent();       // Cancella testo e valori
+    rangeTotale.setBackground(null);  // Rimuove i colori di sfondo (mantiene i bordi)
+  }
+
+  database.getRange("G3:G5").clearContent();
+
+  if (chiamataDaMenu === true) {
+    SpreadsheetApp.getUi().alert("Pulizia A10:G e contatori completata con successo!");
+  }
+
+  return { azzerato: true, messaggio: "Intervallo A10:G e contatori puliti" };
+}
+
+function menuPulisciDatabase() {
+  pulisciDatabase(true);
+}
+
+// -------------------------------------------------------------
+// SEZIONE ELIMINAZIONE COLONNE H:X
+// -------------------------------------------------------------
+function pulisciHX(chiamataDaMenu) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var database = ss.getSheetByName(CONFIG.foglioDatabase);
+
+  if (!database) {
+    throw new Error("Foglio '" + CONFIG.foglioDatabase + "' non trovato");
+  }
+
+  if (chiamataDaMenu === true) {
+    var ui = SpreadsheetApp.getUi();
+    var risposta = ui.alert("Conferma", "Sei sicuro di voler ELIMINARE definitivamente le colonne H:X?", ui.ButtonSet.YES_NO);
+    if (risposta !== ui.Button.YES) {
+      return;
+    }
+  }
+
+  // Elimina le 17 colonne a partire dalla colonna 8 (H) fino alla colonna 24 (X)
+  database.deleteColumns(8, 17);
+
+  if (chiamataDaMenu === true) {
+    SpreadsheetApp.getUi().alert("Eliminazione colonne H:X completata!");
+  }
+}
+
+function menuPulisciHX() {
+  pulisciHX(true);
+}
+
+// -------------------------------------------------------------
+// WEB APP DO-GET
+// -------------------------------------------------------------
 function doGet(e) {
   var callback = e.parameter.callback;
   var azione = String(e.parameter.azione || "").trim();
@@ -119,7 +135,7 @@ function doGet(e) {
     }
 
     if (azione === "azzera") {
-      risposta = azzeraDatabase(database);
+      risposta = pulisciDatabase(false);
     } else {
       var codice = String(e.parameter.codice || "").trim();
       var stato = String(e.parameter.stato || "").trim();
@@ -148,8 +164,8 @@ function doGet(e) {
         risposta.targa = codice;
         risposta.trovata = false;
       } else {
-        risposta.targa = targa;
         risposta.trovata = true;
+        risposta.targa = targa;
 
         var colore = colorePerSituazione(stato, locazione);
         if (colore && rigaFoglio > 0) {
@@ -165,7 +181,6 @@ function doGet(e) {
 
         var log = ss.getSheetByName(CONFIG.foglioLog);
         if (!log) {
-          // Se il foglio Log non esiste, lo crea
           log = ss.insertSheet(CONFIG.foglioLog);
           log.appendRow(["Timestamp", "Codice", "Targa", "Stato", "Locazione"]);
         }
