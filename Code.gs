@@ -10,12 +10,10 @@ var CONFIG = {
   foglioDatabase: "Database",      // foglio con dati auto
   foglioLog: "Log",                // foglio dove salvare le scansioni
   rigaInizio: 10,                  // prima riga dati
-  colCodice: 2,                    // 0-based: colonna C (codice/targa)
-  colTarga: 2,                     // 0-based: colonna C (targa)
-  colCarStatus: 0,                 // 0-based: colonna A (locazione)
-  contaPulitaParcheggio: "G3",
-  contaSporcaParcheggio: "G4",
-  contaSporcaLavaggio: "G5"
+  colTarga: 1,                     // 0-based: colonna B (Plate)
+  contaPulita: "F3",               // Contatore PARCHEGGIO PULITE
+  contaSporche: "F4",              // Contatore PARCHEGGIO SPORCHE
+  contaLavaggio: "F5"              // Contatore LAVAGGIO SPORCHE
 };
 
 function colorePerSituazione(stato, locazione) {
@@ -26,10 +24,79 @@ function colorePerSituazione(stato, locazione) {
 }
 
 function contaPerSituazione(stato, locazione) {
-  if (stato === "Pulita" && locazione === "Parcheggio") return CONFIG.contaPulitaParcheggio;
-  if (stato === "Sporca" && locazione === "Parcheggio") return CONFIG.contaSporcaParcheggio;
-  if (stato === "Sporca" && locazione === "Lavaggio") return CONFIG.contaSporcaLavaggio;
+  if (stato === "Pulita" && locazione === "Parcheggio") return CONFIG.contaPulita;
+  if (stato === "Sporca" && locazione === "Parcheggio") return CONFIG.contaSporche;
+  if (stato === "Sporca" && locazione === "Lavaggio") return CONFIG.contaLavaggio;
   return null;
+}
+
+function colorePerStato(statoCodice) {
+  if (statoCodice === "pulite") return "#c6efce";
+  if (statoCodice === "sporche") return "#ef9a9a";
+  if (statoCodice === "lavaggio") return "#ffe598";
+  return null;
+}
+
+function contatorePerStato(statoCodice) {
+  if (statoCodice === "pulite") return CONFIG.contaPulita;
+  if (statoCodice === "sporche") return CONFIG.contaSporche;
+  if (statoCodice === "lavaggio") return CONFIG.contaLavaggio;
+  return null;
+}
+
+function cercaTargaParziale(database, testoRicerca) {
+  var dati = database.getDataRange().getValues();
+  testoRicerca = normalizza(testoRicerca);
+  var risultati = [];
+  if (testoRicerca === "") return risultati;
+
+  for (var i = CONFIG.rigaInizio - 1; i < dati.length; i++) {
+    if (dati[i] && dati[i][CONFIG.colTarga]) {
+      var targaCorrente = normalizza(dati[i][CONFIG.colTarga]);
+      if (targaCorrente.indexOf(testoRicerca) !== -1) {
+        risultati.push({
+          riga: i + 1,
+          branch: dati[i][0] || "N/D",
+          targa: dati[i][CONFIG.colTarga],
+          group: dati[i][2] || "N/D",
+          brand: dati[i][3] || "N/D",
+          model: dati[i][4] || "N/D",
+          colour: dati[i][5] || "N/D"
+        });
+      }
+    }
+  }
+  return risultati;
+}
+
+function applicaStatoVeicolo(database, targaEsatta, statoCodice) {
+  var dati = database.getDataRange().getValues();
+  var targaCercata = normalizza(targaEsatta);
+  var rigaFoglio = -1;
+
+  for (var i = CONFIG.rigaInizio - 1; i < dati.length; i++) {
+    if (dati[i] && dati[i][CONFIG.colTarga] && normalizza(dati[i][CONFIG.colTarga]) === targaCercata) {
+      rigaFoglio = i + 1;
+      break;
+    }
+  }
+
+  if (rigaFoglio === -1) {
+    throw new Error("Targa " + targaEsatta + " non trovata");
+  }
+
+  var colore = colorePerStato(statoCodice);
+  if (colore) {
+    database.getRange(rigaFoglio, 1, 1, database.getLastColumn()).setBackground(colore);
+  }
+
+  var cellaContatore = contatorePerStato(statoCodice);
+  if (cellaContatore) {
+    var valore = Number(database.getRange(cellaContatore).getValue()) || 0;
+    database.getRange(cellaContatore).setValue(valore + 1);
+  }
+
+  return { success: true, message: "Targa " + targaEsatta + " registrata come " + statoCodice };
 }
 
 function normalizza(text) {
@@ -136,6 +203,15 @@ function doGet(e) {
 
     if (azione === "azzera") {
       risposta = pulisciDatabase(false);
+    } else if (azione === "cerca") {
+      var targa = String(e.parameter.targa || "").trim();
+      if (!targa) throw new Error("Targa mancante");
+      risposta = { risultati: cercaTargaParziale(database, targa) };
+    } else if (azione === "salva") {
+      var targa = String(e.parameter.targa || "").trim();
+      var statoCodice = String(e.parameter.stato || "").trim();
+      if (!targa || !statoCodice) throw new Error("Targa o stato mancante");
+      risposta = applicaStatoVeicolo(database, targa, statoCodice);
     } else {
       var codice = String(e.parameter.codice || "").trim();
       var stato = String(e.parameter.stato || "").trim();
@@ -153,7 +229,7 @@ function doGet(e) {
       var codicePulito = normalizza(codice);
 
       for (var i = CONFIG.rigaInizio - 1; i < dati.length; i++) {
-        if (normalizza(dati[i][CONFIG.colCodice]) === codicePulito) {
+        if (normalizza(dati[i][CONFIG.colTarga]) === codicePulito) {
           rigaFoglio = i + 1;
           targa = String(dati[i][CONFIG.colTarga]).trim() || codice;
           break;
@@ -170,7 +246,6 @@ function doGet(e) {
         var colore = colorePerSituazione(stato, locazione);
         if (colore && rigaFoglio > 0) {
           database.getRange(rigaFoglio, 1, 1, database.getLastColumn()).setBackground(colore);
-          database.getRange(rigaFoglio, CONFIG.colCarStatus + 1).setValue(locazione);
         }
 
         var cellaContatore = contaPerSituazione(stato, locazione);

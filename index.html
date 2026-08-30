@@ -25,6 +25,14 @@
     .result-sporca-parcheggio { background-color: #ef9a9a !important; color: #721c24 !important; }
     .result-sporca-lavaggio { background-color: #ffe598 !important; color: #856404 !important; }
     .result-errore { background-color: #dc3545 !important; color: white !important; }
+    #schermataFleet { max-width: 450px; margin: 0 auto; text-align: left; }
+    .fleet-form { background: white; padding: 15px; border-radius: 8px; margin-top: 15px; }
+    .fleet-form label { display: block; font-weight: bold; margin: 10px 0 5px; }
+    .fleet-form input, .fleet-form select { width: 100%; padding: 10px; box-sizing: border-box; font-size: 16px; }
+    .opzione-targa { padding: 10px; margin: 5px 0; border: 1px solid #dadce0; border-radius: 6px; cursor: pointer; font-size: 16px; background: #fff3cd; }
+    .opzione-targa:hover { background: #ffe0b2; }
+    #messaggioFleet { margin-top: 15px; padding: 10px; border-radius: 6px; font-weight: bold; display: none; }
+    .btn-link { background: none; border: none; color: #1a73e8; text-decoration: underline; font-size: 14px; cursor: pointer; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -35,6 +43,8 @@
     <button id="btnPulita" class="btn" onclick="selezionaSituazione('Pulita', 'Parcheggio', 'Pulita in parcheggio', 'result-pulita')">✅ Pulita in parcheggio</button>
     <button id="btnSporcaParcheggio" class="btn" onclick="selezionaSituazione('Sporca', 'Parcheggio', 'Sporca in parcheggio', 'result-sporca-parcheggio')">🚗 Sporca in parcheggio</button>
     <button id="btnSporcaLavaggio" class="btn" onclick="selezionaSituazione('Sporca', 'Lavaggio', 'Sporca al lavaggio', 'result-sporca-lavaggio')">&#129529; Sporca al lavaggio</button>
+    <br>
+    <button class="btn" style="background-color:#e2e3e5;" onclick="apriFleet()">🔍 Fleet Check Manuale</button>
   </div>
 
   <div id="schermataScanner" style="display:none;">
@@ -44,6 +54,24 @@
     <button id="btnRiavvia" class="btn" onclick="avviaScanner()">Fai un'altra scansione</button>
     <br>
     <button id="btnCambiaModalita" class="btn" onclick="tornaSelezione()">↩️ Cambia modalità</button>
+  </div>
+
+  <div id="schermataFleet" style="display:none;">
+    <h3>🚗 Fleet Check Manuale</h3>
+    <div class="fleet-form">
+      <label for="statoFleet">Stato:</label>
+      <select id="statoFleet">
+        <option value="pulite">🟩 Parcheggio Pulite</option>
+        <option value="sporche">🟥 Parcheggio Sporche</option>
+        <option value="lavaggio">🟨 Lavaggio Sporche</option>
+      </select>
+      <label for="targaFleet">Targa (anche parziale):</label>
+      <input type="text" id="targaFleet" placeholder="ES. HD367 o 367" autocomplete="off">
+      <button class="btn" onclick="avviaRicercaFleet()">Trova e Registra</button>
+      <button class="btn-link" onclick="tornaHome()">↩️ Torna indietro</button>
+      <div id="opzioniFleet" style="display:none;"></div>
+      <div id="messaggioFleet"></div>
+    </div>
   </div>
 
   <script>
@@ -136,6 +164,102 @@
             document.getElementById('btnRiavvia').style.display = "inline-block";
           });
       });
+    }
+
+    function apriFleet() {
+      document.getElementById('selezioneModalita').style.display = "none";
+      document.getElementById('schermataFleet').style.display = "block";
+      document.getElementById('targaFleet').focus();
+    }
+
+    function tornaHome() {
+      document.getElementById('schermataFleet').style.display = "none";
+      document.getElementById('selezioneModalita').style.display = "block";
+    }
+
+    function avviaRicercaFleet() {
+      var targa = document.getElementById('targaFleet').value.trim().toUpperCase();
+      var divMsg = document.getElementById('messaggioFleet');
+      divMsg.style.display = "none";
+      if (!targa) {
+        mostraMessaggioFleet("Inserisci una targa", false);
+        return;
+      }
+      document.getElementById('targaFleet').disabled = true;
+      jsonpRequest(API_URL + "?azione=cerca&targa=" + encodeURIComponent(targa))
+        .then(function(data) {
+          document.getElementById('targaFleet').disabled = false;
+          if (data.errore) {
+            mostraMessaggioFleet(data.errore, false);
+            return;
+          }
+          var risultati = data.risultati || [];
+          if (risultati.length === 0) {
+            mostraMessaggioFleet("Nessuna targa trovata", false);
+          } else if (risultati.length === 1) {
+            eseguiSalvataggioFleet(risultati[0].targa);
+          } else {
+            mostraScelteMultipleFleet(risultati);
+          }
+        })
+        .catch(function(err) {
+          document.getElementById('targaFleet').disabled = false;
+          mostraMessaggioFleet("Errore: " + err.message, false);
+        });
+    }
+
+    function mostraScelteMultipleFleet(risultati) {
+      var div = document.getElementById('opzioniFleet');
+      div.innerHTML = "";
+      risultati.forEach(function(auto) {
+        var el = document.createElement('div');
+        el.className = "opzione-targa";
+        el.innerHTML = "<strong>" + auto.targa + "</strong> — " + (auto.brand || "") + " " + (auto.model || "");
+        el.onclick = function() {
+          div.style.display = "none";
+          eseguiSalvataggioFleet(auto.targa);
+        };
+        div.appendChild(el);
+      });
+      div.style.display = "block";
+    }
+
+    function eseguiSalvataggioFleet(targa) {
+      var stato = document.getElementById('statoFleet').value;
+      document.getElementById('targaFleet').disabled = true;
+      jsonpRequest(API_URL + "?azione=salva&targa=" + encodeURIComponent(targa) + "&stato=" + encodeURIComponent(stato))
+        .then(function(data) {
+          document.getElementById('targaFleet').disabled = false;
+          document.getElementById('targaFleet').value = "";
+          document.getElementById('opzioniFleet').style.display = "none";
+          if (data.errore) {
+            mostraMessaggioFleet(data.errore, false);
+          } else if (data.success) {
+            mostraMessaggioFleet(data.message, true);
+          } else {
+            mostraMessaggioFleet("Errore sconosciuto", false);
+          }
+          document.getElementById('targaFleet').focus();
+        })
+        .catch(function(err) {
+          document.getElementById('targaFleet').disabled = false;
+          mostraMessaggioFleet("Errore: " + err.message, false);
+        });
+    }
+
+    function mostraMessaggioFleet(testo, isSuccess) {
+      var div = document.getElementById('messaggioFleet');
+      div.innerText = testo;
+      div.style.display = "block";
+      if (isSuccess) {
+        div.style.backgroundColor = "#e6f4ea";
+        div.style.color = "#137333";
+        div.style.border = "1px solid #137333";
+      } else {
+        div.style.backgroundColor = "#fce8e6";
+        div.style.color = "#c5221f";
+        div.style.border = "1px solid #c5221f";
+      }
     }
 
     function onScanFailure(error) {}
