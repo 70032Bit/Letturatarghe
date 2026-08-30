@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; padding: 15px; background-color: #f8f9fa; color: #333; }
+      h3 { margin-top: 0; color: #1a73e8; }
+      .form-group { margin-bottom: 15px; }
+      label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 13px; }
+      select, input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #dadce0; border-radius: 4px; font-size: 14px; }
+      input[type="text"] { text-transform: uppercase; font-weight: bold; letter-spacing: 1px; }
+      .btn { width: 100%; padding: 10px; background-color: #1a73e8; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 5px; }
+      .btn:hover { background-color: #1557b0; }
+      .btn-secondary { background-color: #5f6368; margin-top: 25px; font-size: 12px; padding: 7px; }
+      .btn-secondary:hover { background-color: #45474a; }
+      #messaggio { margin-top: 15px; padding: 10px; border-radius: 4px; font-size: 13px; display: none; font-weight: bold; }
+      .success { background-color: #e6f4ea; color: #137333; border: 1px solid #137333; }
+      .error { background-color: #fce8e6; color: #c5221f; border: 1px solid #c5221f; }
+      #bloccoAmbiguita { display: none; margin-top: 15px; padding: 10px; background-color: #fff; border: 1px solid #ffe0b2; border-radius: 4px; }
+      .titolo-scelta { font-size: 13px; font-weight: bold; color: #e65100; margin-bottom: 8px; }
+      .opzione-targa { padding: 8px; margin-bottom: 5px; background-color: #fff3e0; border: 1px solid #ffb74d; border-radius: 4px; cursor: pointer; font-size: 13px; }
+      .opzione-targa:hover { background-color: #ffe0b2; }
+      .dettaglio-modello { font-size: 11px; color: #666; font-weight: normal; }
+    </style>
+  </head>
+  <body>
+    <h3>🚗 Fleet Check</h3>
+    <p style="font-size:12px; color:#666;">Trova i veicoli e colora la riga nel database.</p>
+    
+    <div class="form-group">
+      <label for="stato">1. SELEZIONA COLORE EVIDENZIATORE:</label>
+      <select id="stato" onchange="focusTarga()">
+        <option value="pulite">🟩 PARCHEGGIO PULITE (Verde)</option>
+        <option value="sporche">🟥 PARCHEGGIO SPORCHE (Rosso)</option>
+        <option value="lavaggio">🟨 LAVAGGIO SPORCHE (Giallo)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label for="targa">2. CERCA TARGA (Anche parziale):</label>
+      <input type="text" id="targa" placeholder="ES. HD367" autocomplete="off">
+    </div>
+    
+    <button class="btn" onclick="avviaRicerca()">Trova ed Evidenzia</button>
+    
+    <div id="bloccoAmbiguita">
+      <div class="titolo-scelta">⚠️ Più auto trovate! Clicca su quella corretta:</div>
+      <div id="listaOpzioni"></div>
+    </div>
+    
+    <div id="messaggio"></div>
+
+    <!-- Nuovo bottone di allineamento manuale dei contatori -->
+    <button class="btn btn-secondary" onclick="forzaSincronizzazione()">🔄 Sincronizza Contatori</button>
+
+    <script>
+      document.getElementById('targa').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') { avviaRicerca(); }
+      });
+
+      function focusTarga() {
+        document.getElementById('targa').focus();
+      }
+
+      function mostraMessaggio(testo, eSuccesso) {
+        var divMsg = document.getElementById('messaggio');
+        divMsg.innerText = testo;
+        divMsg.className = eSuccesso ? 'success' : 'error';
+        divMsg.style.display = "block";
+      }
+
+      function avviaRicerca() {
+        var targaInput = document.getElementById('targa');
+        var testoInviato = targaInput.value.trim();
+        var divMsg = document.getElementById('messaggio');
+        var bloccoAmbiguita = document.getElementById('bloccoAmbiguita');
+        
+        divMsg.style.display = "none";
+        bloccoAmbiguita.style.display = "none";
+        
+        if (testoInviato === "") {
+          mostraMessaggio("Inserisci la targa da cercare!", false);
+          return;
+        }
+        
+        targaInput.disabled = true;
+        
+        google.script.run
+          .withSuccessHandler(function(risultati) {
+            targaInput.disabled = false;
+            
+            if (risultati.errore) {
+              mostraMessaggio(risultati.errore, false);
+              return;
+            }
+            
+            if (risultati.length === 0) {
+              mostraMessaggio("Nessuna targa trovata per: " + testoInviato, false);
+              targaInput.select();
+            } 
+            else if (risultati.length === 1) {
+              eseguiSalvataggioDefinitivo(risultati[0].targa);
+            } 
+            else {
+              mostraScelteMultiple(risultati);
+            }
+          })
+          .cercaTargaParziale(testoInviato);
+      }
+
+      function mostraScelteMultiple(autoTrovate) {
+        var bloccoAmbiguita = document.getElementById('bloccoAmbiguita');
+        var listaOpzioni = document.getElementById('listaOpzioni');
+        listaOpzioni.innerHTML = "";
+        
+        autoTrovate.forEach(function(auto) {
+          var divElement = document.createElement('div');
+          divElement.className = 'opzione-targa';
+          divElement.innerHTML = "<strong>" + auto.targa + "</strong> - <span class='dettaglio-modello'>" + auto.brand + " " + auto.modello + "</span>";
+          
+          divElement.onclick = function() {
+            eseguiSalvataggioDefinitivo(auto.targa);
+          };
+          
+          listaOpzioni.appendChild(divElement);
+        });
+        
+        bloccoAmbiguita.style.display = "block";
+      }
+
+      function eseguiSalvataggioDefinitivo(targaEsatta) {
+        var codiceStato = document.getElementById('stato').value;
+        var targaInput = document.getElementById('targa');
+        var bloccoAmbiguita = document.getElementById('bloccoAmbiguita');
+        
+        bloccoAmbiguita.style.display = "none";
+        
+        google.script.run
+          .withSuccessHandler(function(risultato) {
+            if (risultato.errore) {
+              mostraMessaggio(risultato.errore, false);
+            } else {
+              mostraMessaggio("Riga evidenziata e contatori aggiornati per: " + risultato.targa, true);
+              targaInput.value = ""; 
+              targaInput.focus();    
+            }
+          })
+          .registraStatoVeicolo(targaEsatta, codiceStato);
+      }
+
+      function forzaSincronizzazione() {
+        document.getElementById('messaggio').style.display = "none";
+        google.script.run
+          .withSuccessHandler(function(risultato) {
+            if (risultato.errore) {
+              mostraMessaggio(risultato.errore, false);
+            } else {
+              mostraMessaggio("Contatori ricalcolati e allineati con successo!", true);
+            }
+          })
+          .menuSincronizzaContatori();
+      }
+    </script>
+  </body>
+</html>

@@ -214,7 +214,7 @@
       risultati.forEach(function(auto) {
         var el = document.createElement('div');
         el.className = "opzione-targa";
-        el.innerHTML = "<strong>" + auto.targa + "</strong> — " + (auto.brand || "") + " " + (auto.model || "");
+        el.innerHTML = "<strong>" + auto.targa + "</strong> — " + (auto.brand || "") + " " + (auto.modello || "");
         el.onclick = function() {
           div.style.display = "none";
           eseguiSalvataggioFleet(auto.targa);
@@ -234,8 +234,8 @@
           document.getElementById('opzioniFleet').style.display = "none";
           if (data.errore) {
             mostraMessaggioFleet(data.errore, false);
-          } else if (data.success) {
-            mostraMessaggioFleet(data.message, true);
+          } else if (data.successo) {
+            mostraMessaggioFleet((data.targa || "") + " — " + (data.stato || "Registrato"), true);
           } else {
             mostraMessaggioFleet("Errore sconosciuto", false);
           }
